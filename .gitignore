@@ -1,0 +1,17 @@
+## Visual Studio and .NET Build Artifacts
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.userprefs
+*.suo
+.vs/
+.vscode/
+
+## Environment / Logs
+*.log
+.env
+.env.local
+Thumbs.db
+Desktop.ini

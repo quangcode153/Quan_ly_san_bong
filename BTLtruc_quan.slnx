@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BTLtruc_quan.Shared/BTLtruc_quan.Shared.csproj" />
+    <Project Path="src/BTLtruc_quan.WebApi/BTLtruc_quan.WebApi.csproj" />
+    <Project Path="src/BTLtruc_quan.WinForms/BTLtruc_quan.WinForms.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BTLtruc_quan.Tests/BTLtruc_quan.Tests.csproj" />
+  </Folder>
+</Solution>
