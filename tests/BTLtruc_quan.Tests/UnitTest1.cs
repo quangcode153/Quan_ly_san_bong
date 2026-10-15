@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace BTLtruc_quan.Tests;
 
 public class UnitTest1
