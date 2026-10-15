@@ -1,8 +1,14 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/BTLtruc_quan.Shared/BTLtruc_quan.Shared.csproj" />
-    <Project Path="src/BTLtruc_quan.WebApi/BTLtruc_quan.WebApi.csproj" />
-    <Project Path="src/BTLtruc_quan.WinForms/BTLtruc_quan.WinForms.csproj" />
+    <Folder Name="/src/backend/">
+      <Project Path="src/backend/BTLtruc_quan.WebApi/BTLtruc_quan.WebApi.csproj" />
+    </Folder>
+    <Folder Name="/src/frontend/">
+      <Project Path="src/frontend/BTLtruc_quan.WinForms/BTLtruc_quan.WinForms.csproj" />
+    </Folder>
+    <Folder Name="/src/shared/">
+      <Project Path="src/shared/BTLtruc_quan.Shared/BTLtruc_quan.Shared.csproj" />
+    </Folder>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BTLtruc_quan.Tests/BTLtruc_quan.Tests.csproj" />

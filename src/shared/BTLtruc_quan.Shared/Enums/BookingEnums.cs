@@ -3,7 +3,9 @@ namespace BTLtruc_quan.Shared.Enums;
 public enum BookingStatus
 {
     Holding = 1,
+    PendingPayment = 1, // Alias tuong thich code DTO
     Deposited = 2,
+    Confirmed = 2,      // Alias tuong thich code DTO
     CheckedIn = 3,
     Completed = 4,
     Cancelled = 5,

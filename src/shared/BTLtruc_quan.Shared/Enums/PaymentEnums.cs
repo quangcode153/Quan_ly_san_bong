@@ -30,7 +30,10 @@ public enum PaymentMethod
     Gateway = 1,
     Cash = 2,
     Transfer = 3,
-    Card = 4
+    Card = 4,
+    BankTransfer = 3, // Alias tuong thich code DTO
+    EWallet = 1,      // Alias tuong thich code DTO
+    CreditCard = 4    // Alias tuong thich code DTO
 }
 
 public enum PaymentGateway

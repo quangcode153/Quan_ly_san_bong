@@ -3,6 +3,7 @@ using BTLtruc_quan.WebApi.Entities.Courts;
 using BTLtruc_quan.WebApi.Entities.System;
 using BTLtruc_quan.WebApi.Entities.Users;
 using Microsoft.EntityFrameworkCore;
+using CourtType = BTLtruc_quan.WebApi.Entities.Courts.CourtType;
 
 namespace BTLtruc_quan.WebApi.Data;
 
