@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\BTLtruc_quan.Shared\BTLtruc_quan.Shared.csproj" />
+    <ProjectReference Include="..\..\shared\BTLtruc_quan.Shared\BTLtruc_quan.Shared.csproj" />
   </ItemGroup>
 
 </Project>

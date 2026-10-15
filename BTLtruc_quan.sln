@@ -1,15 +1,15 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.Shared", "src\BTLtruc_quan.Shared\BTLtruc_quan.Shared.csproj", "{885458D1-AB45-4D8B-B5D0-F1E5F42D6DDF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.Shared", "src\shared\BTLtruc_quan.Shared\BTLtruc_quan.Shared.csproj", "{885458D1-AB45-4D8B-B5D0-F1E5F42D6DDF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.WebApi", "src\BTLtruc_quan.WebApi\BTLtruc_quan.WebApi.csproj", "{BDDF3757-6180-4D2E-8CC6-791A925E9D28}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.WebApi", "src\backend\BTLtruc_quan.WebApi\BTLtruc_quan.WebApi.csproj", "{BDDF3757-6180-4D2E-8CC6-791A925E9D28}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.WinForms", "src\BTLtruc_quan.WinForms\BTLtruc_quan.WinForms.csproj", "{D08D4968-C120-4220-B1FE-C6A7C556FF9A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BTLtruc_quan.WinForms", "src\frontend\BTLtruc_quan.WinForms\BTLtruc_quan.WinForms.csproj", "{D08D4968-C120-4220-B1FE-C6A7C556FF9A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
