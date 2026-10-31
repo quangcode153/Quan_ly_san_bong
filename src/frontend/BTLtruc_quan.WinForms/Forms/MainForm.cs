@@ -7,6 +7,9 @@ using BTLtruc_quan.WinForms.Controls.Cards;
 using BTLtruc_quan.WinForms.Controls.Common;
 using BTLtruc_quan.WinForms.Controls.Grids;
 using BTLtruc_quan.WinForms.Controls.Inputs;
+using BTLtruc_quan.WinForms.Services.Endpoints;
+using BTLtruc_quan.WinForms.Services.Network;
+using BTLtruc_quan.WinForms.Services.Realtime;
 using FontAwesome.Sharp;
 
 namespace BTLtruc_quan.WinForms.Forms;
@@ -52,6 +55,9 @@ public partial class MainForm : Form
     private Label _lblMatrixStatusInfo = null!;
     private CourtGridResponseDto _fullMatrixData = null!;
 
+    // Network & Realtime Services
+    private CourtRealtimeClient? _courtRealtimeClient;
+
     // Current State
     private int _currentNavigationIndex = 0; // 0: Dashboard, 1: Schedule, 2: Bookings, 3: Settings
 
@@ -64,9 +70,94 @@ public partial class MainForm : Form
         InitializeComponent();
         DoubleBuffered = true;
 
+        // Kích hoạt phiên làm việc DevMode với tài khoản Lễ tân Huỳnh Tấn Phát
+        UserSession.EnableDevMode();
+        UserSession.OnSessionExpired += HandleSessionExpired;
+
         BuildMainLayout();
-        LoadInitialData();
+        _fullMatrixData = GenerateMockData(DateTime.Today);
+        ApplyCourtMatrixFilter();
         NavigateTo(0); // Mặc định mở Dashboard
+    }
+
+    protected override async void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        await LoadMatrixDataAsync();
+        await InitializeRealtimeAsync();
+    }
+
+    private void HandleSessionExpired()
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(HandleSessionExpired));
+            return;
+        }
+
+        MessageBox.Show("Phiên làm việc của bạn đã hết hạn (401 Unauthorized). Vui lòng đăng nhập lại để tiếp tục thao tác.",
+            "Hết hạn phiên làm việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+    }
+
+    private async Task InitializeRealtimeAsync()
+    {
+        try
+        {
+            _courtRealtimeClient = new CourtRealtimeClient();
+            _courtRealtimeClient.OnCellUpdated += HandleRealtimeCellUpdated;
+            _courtRealtimeClient.OnConnectionStateChanged += HandleRealtimeConnectionChanged;
+            await _courtRealtimeClient.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Lỗi khởi động SignalR: {ex.Message}");
+        }
+    }
+
+    private void HandleRealtimeConnectionChanged(bool isConnected, string message)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => HandleRealtimeConnectionChanged(isConnected, message)));
+            return;
+        }
+
+        if (isConnected)
+        {
+            _badgeShiftStatus.SetStatus("Available", "Online");
+        }
+        else
+        {
+            _badgeShiftStatus.SetStatus("Maintenance", "Offline");
+        }
+    }
+
+    private void HandleRealtimeCellUpdated(CourtTimeSlotCellDto updatedCell)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => HandleRealtimeCellUpdated(updatedCell)));
+            return;
+        }
+
+        if (_fullMatrixData == null) return;
+
+        var targetRow = _fullMatrixData.Rows.FirstOrDefault(r => r.CourtId == updatedCell.CourtId);
+        if (targetRow != null)
+        {
+            var targetCell = targetRow.Cells.FirstOrDefault(c => c.TimeSlotId == updatedCell.TimeSlotId);
+            if (targetCell != null)
+            {
+                targetCell.VisualStatus = updatedCell.VisualStatus;
+                if (!string.IsNullOrEmpty(updatedCell.BookingCode)) targetCell.BookingCode = updatedCell.BookingCode;
+                if (!string.IsNullOrEmpty(updatedCell.CustomerName)) targetCell.CustomerName = updatedCell.CustomerName;
+                if (!string.IsNullOrEmpty(updatedCell.CustomerPhone)) targetCell.CustomerPhone = updatedCell.CustomerPhone;
+                if (updatedCell.Price > 0) targetCell.Price = updatedCell.Price;
+
+                ApplyCourtMatrixFilter();
+                _lblMatrixStatusInfo.Text = $"⚡ [Realtime] Ô sân {targetRow.CourtName} ({targetCell.TimeSlotDisplayName}) vừa cập nhật sang trạng thái: {updatedCell.VisualStatus}";
+            }
+        }
     }
 
     // =========================================================================
@@ -327,9 +418,9 @@ public partial class MainForm : Form
             Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.5f * factor), FontStyle.Bold),
             Cursor = Cursors.Hand
         };
-        _btnRefresh.Click += (s, e) =>
+        _btnRefresh.Click += async (s, e) =>
         {
-            LoadInitialData();
+            await LoadMatrixDataAsync();
             MessageBox.Show("Dữ liệu ca sân và thống kê vừa được đồng bộ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
 
@@ -720,7 +811,7 @@ public partial class MainForm : Form
             Size = new Size(DpiHelper.Scale(125, factor), DpiHelper.Scale(32, factor)),
             Margin = new Padding(0, DpiHelper.Scale(2, factor), DpiHelper.Scale(16, factor), 0)
         };
-        _dtpDate.ValueChanged += (s, e) => ApplyCourtMatrixFilter();
+        _dtpDate.ValueChanged += async (s, e) => await LoadMatrixDataAsync();
 
         // Lọc loại sân
         var lblType = new Label
@@ -969,16 +1060,66 @@ public partial class MainForm : Form
     }
 
     // =========================================================================
-    // 9. NẠP DỮ LIỆU GIẢ LẬP MA TRẬN SÂN (MOCK DATA GENERATION)
+    // 9. NẠP DỮ LIỆU MA TRẬN SÂN (API NETWORK & FALLBACK MOCK DATA)
     // =========================================================================
 
-    private void LoadInitialData()
+    private async Task LoadMatrixDataAsync()
     {
-        _fullMatrixData = new CourtGridResponseDto
+        var selectedDate = _dtpDate.Value.Date;
+        int branchId = UserSession.BranchId;
+
+        if (_lblMatrixStatusInfo != null)
         {
-            BranchId = 1,
-            BranchName = "SportChain - Chi nhánh Quận 7",
-            SelectedDate = _dtpDate.Value.Date
+            _lblMatrixStatusInfo.Text = "⏳ Đang kết nối máy chủ WebApi và nạp lịch sân...";
+        }
+
+        Cursor = Cursors.WaitCursor;
+
+        try
+        {
+            // 1. Thử gọi API lấy dữ liệu thực tế từ máy chủ Backend
+            var apiData = await CourtScheduleApiService.GetCourtMatrixAsync(branchId, selectedDate);
+            if (apiData != null && apiData.Rows != null && apiData.Rows.Count > 0)
+            {
+                _fullMatrixData = apiData;
+                if (_lblMatrixStatusInfo != null)
+                {
+                    _lblMatrixStatusInfo.Text = $"🟢 Đã đồng bộ lịch sân trực tiếp từ máy chủ WebApi ({apiData.Rows.Count} sân). Nhấp đúp chuột để xem chi tiết ca.";
+                }
+            }
+            else
+            {
+                // Máy chủ chưa có dữ liệu ngày này -> Dùng Mock Data
+                _fullMatrixData = GenerateMockData(selectedDate);
+                if (_lblMatrixStatusInfo != null)
+                {
+                    _lblMatrixStatusInfo.Text = "ℹ️ Máy chủ chưa có dữ liệu lịch sân cho ngày này. Đang nạp dữ liệu mô phỏng.";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // 2. Cơ chế Fallback an toàn khi Backend offline / mất mạng
+            _fullMatrixData = GenerateMockData(selectedDate);
+            if (_lblMatrixStatusInfo != null)
+            {
+                _lblMatrixStatusInfo.Text = $"⚠️ Không thể kết nối WebApi ({ex.Message}). Chuyển sang chế độ Offline Mock Data.";
+            }
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+            ApplyCourtMatrixFilter();
+        }
+    }
+
+    private CourtGridResponseDto GenerateMockData(DateTime date)
+    {
+        var mockResponse = new CourtGridResponseDto
+        {
+            BranchId = UserSession.BranchId,
+            BranchName = UserSession.BranchName,
+            SelectedDate = date.Date
         };
 
         // 17 Khung giờ từ 06:00 đến 23:00 (mỗi ca 60 phút)
@@ -988,7 +1129,7 @@ public partial class MainForm : Form
             var end = new TimeSpan(i + 1, 0, 0);
             bool isPeak = (i >= 17 && i <= 21); // Giờ cao điểm: 17h - 22h
 
-            _fullMatrixData.TimeSlots.Add(new TimeSlotDto
+            mockResponse.TimeSlots.Add(new TimeSlotDto
             {
                 Id = i - 5,
                 SlotIndex = i - 5,
@@ -1021,9 +1162,9 @@ public partial class MainForm : Form
                 CourtType = type
             };
 
-            for (int s = 0; s < _fullMatrixData.TimeSlots.Count; s++)
+            for (int s = 0; s < mockResponse.TimeSlots.Count; s++)
             {
-                var slot = _fullMatrixData.TimeSlots[s];
+                var slot = mockResponse.TimeSlots[s];
                 decimal price = slot.IsPeakHour ? peakPrice : normalPrice;
 
                 var cell = new CourtTimeSlotCellDto
@@ -1031,7 +1172,7 @@ public partial class MainForm : Form
                     CourtId = row.CourtId,
                     TimeSlotId = slot.Id,
                     TimeSlotDisplayName = slot.DisplayName,
-                    BookingDate = _dtpDate.Value.Date,
+                    BookingDate = date.Date,
                     Price = price,
                     VisualStatus = "Available"
                 };
@@ -1073,10 +1214,10 @@ public partial class MainForm : Form
                 row.Cells.Add(cell);
             }
 
-            _fullMatrixData.Rows.Add(row);
+            mockResponse.Rows.Add(row);
         }
 
-        ApplyCourtMatrixFilter();
+        return mockResponse;
     }
 
     private void ApplyCourtMatrixFilter()
@@ -1125,5 +1266,16 @@ public partial class MainForm : Form
         }
 
         _courtMatrixGrid.LoadData(filteredResponse);
+    }
+
+    protected override async void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        UserSession.OnSessionExpired -= HandleSessionExpired;
+        if (_courtRealtimeClient != null)
+        {
+            await _courtRealtimeClient.DisposeAsync();
+            _courtRealtimeClient = null;
+        }
     }
 }
