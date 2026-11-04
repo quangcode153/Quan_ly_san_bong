@@ -55,6 +55,10 @@ public class PosController : ControllerBase
         {
             return BadRequest(ApiResponse<BookingServiceDetailDto>.Fail(ex.Message));
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<BookingServiceDetailDto>.Fail(ex.Message));
+        }
     }
 
     /// <summary>

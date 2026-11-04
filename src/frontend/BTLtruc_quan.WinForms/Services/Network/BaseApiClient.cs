@@ -92,6 +92,8 @@ public abstract class BaseApiClient
     {
         if (endpoint.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
             return endpoint.Substring(5);
+        if (endpoint.StartsWith("api/", StringComparison.OrdinalIgnoreCase))
+            return endpoint.Substring(4);
         if (endpoint.StartsWith("/"))
             return endpoint.Substring(1);
         return endpoint;

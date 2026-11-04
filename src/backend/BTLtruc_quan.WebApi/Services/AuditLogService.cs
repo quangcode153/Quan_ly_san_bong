@@ -79,10 +79,13 @@ public class AuditLogService : IAuditLogService
                                      a.EntityType.ToLower().Contains(kw));
         }
 
+        int pageIndex = filter.PageIndex > 0 ? filter.PageIndex : 1;
+        int pageSize = filter.PageSize > 0 ? filter.PageSize : 20;
+
         var pagedLogs = await query
             .OrderByDescending(a => a.CreatedAt)
-            .Skip((filter.PageIndex - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .Skip((pageIndex - 1) * pageSize)
+            .Take(pageSize)
             .Select(a => new AuditLogDto
             {
                 Id = a.Id,

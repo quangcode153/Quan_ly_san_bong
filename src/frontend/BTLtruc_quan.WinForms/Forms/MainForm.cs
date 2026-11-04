@@ -70,8 +70,11 @@ public partial class MainForm : Form
         InitializeComponent();
         DoubleBuffered = true;
 
-        // Kích hoạt phiên làm việc DevMode với tài khoản Lễ tân Huỳnh Tấn Phát
-        UserSession.EnableDevMode();
+        // Chỉ kích hoạt DevMode nếu chưa có phiên đăng nhập hợp lệ
+        if (!UserSession.IsLoggedIn)
+        {
+            UserSession.EnableDevMode();
+        }
         UserSession.OnSessionExpired += HandleSessionExpired;
 
         BuildMainLayout();

@@ -132,7 +132,34 @@ public class BranchManagementService : IBranchManagementService
     public async Task<bool> SetCourtMaintenanceStatusAsync(int courtId, bool isMaintenance, string performerName, CancellationToken cancellationToken = default)
     {
         var court = await _context.Courts.FindAsync(new object[] { (long)courtId }, cancellationToken);
-        if (court == null || court.DeletedAt != null) return false;
+        if (court == null || court.DeletedAt != null)
+        {
+            throw new KeyNotFoundException($"Không tìm thấy sân thi đấu ID {courtId}.");
+        }
+
+        if (isMaintenance)
+        {
+            bool hasInPlayBooking = await _context.BookingSlots
+                .AnyAsync(bs => bs.CourtId == courtId && 
+                                bs.Status == BookingSlotStatus.Active &&
+                                bs.Booking.Status == BookingStatus.CheckedIn, cancellationToken);
+            if (hasInPlayBooking)
+            {
+                throw new InvalidOperationException("Không thể khóa bảo trì sân đang có trận đấu diễn ra (CheckedIn).");
+            }
+        }
+
+        if (isMaintenance)
+        {
+            bool hasInPlayBooking = await _context.BookingSlots
+                .AnyAsync(bs => bs.CourtId == courtId && 
+                                bs.Status == BookingSlotStatus.Active &&
+                                bs.Booking.Status == BookingStatus.CheckedIn, cancellationToken);
+            if (hasInPlayBooking)
+            {
+                throw new InvalidOperationException("Không thể khóa bảo trì sân đang có trận đấu diễn ra (CheckedIn).");
+            }
+        }
 
         var targetStatus = isMaintenance 
             ? CourtStatus.Maintenance 
@@ -161,7 +188,21 @@ public class BranchManagementService : IBranchManagementService
     public async Task<bool> SoftDeleteCourtAsync(int courtId, string performerName, CancellationToken cancellationToken = default)
     {
         var court = await _context.Courts.FindAsync(new object[] { (long)courtId }, cancellationToken);
-        if (court == null || court.DeletedAt != null) return false;
+        if (court == null || court.DeletedAt != null)
+        {
+            throw new KeyNotFoundException($"Không tìm thấy sân thi đấu ID {courtId}.");
+        }
+
+        bool hasActiveBookings = await _context.BookingSlots
+            .AnyAsync(bs => bs.CourtId == courtId && 
+                            bs.Status == BookingSlotStatus.Active &&
+                            (bs.Booking.Status == BookingStatus.Confirmed || 
+                             bs.Booking.Status == BookingStatus.CheckedIn || 
+                             bs.Booking.Status == BookingStatus.Holding), cancellationToken);
+        if (hasActiveBookings)
+        {
+            throw new InvalidOperationException("Không thể xóa sân đang có đơn đặt hiệu lực hoặc đang có khách sử dụng (QT15).");
+        }
 
         // Xóa mềm theo QT11
         court.DeletedAt = DateTime.UtcNow;
@@ -209,11 +250,15 @@ public class BranchManagementService : IBranchManagementService
     {
         bool isPeak = request.TimeSlotId >= 12; // Sau 17:00 là giờ cao điểm (QT05)
         var targetSlotType = isPeak ? SlotType.Peak : SlotType.OffPeak;
+        var targetDayType = request.SpecificDayOfWeek.HasValue && (request.SpecificDayOfWeek == DayOfWeek.Saturday || request.SpecificDayOfWeek == DayOfWeek.Sunday) 
+            ? DayType.Weekend 
+            : DayType.Weekday;
 
         var rule = await _context.PriceRules
             .FirstOrDefaultAsync(p => p.BranchId == request.BranchId && 
                                      p.CourtTypeId == (long)(int)request.CourtType &&
-                                     p.SlotType == targetSlotType, cancellationToken);
+                                     p.SlotType == targetSlotType &&
+                                     p.DayType == targetDayType, cancellationToken);
 
         decimal oldPrice = 0;
 
@@ -371,6 +416,11 @@ public class BranchManagementService : IBranchManagementService
 
     public async Task<bool> UpdateStockQuantityAsync(int serviceItemId, int newStock, string performerName, CancellationToken cancellationToken = default)
     {
+        if (newStock < 0)
+        {
+            throw new ArgumentException("Số lượng tồn kho không được âm.");
+        }
+
         var service = await _context.Services.FindAsync(new object[] { (long)serviceItemId }, cancellationToken);
         if (service == null || service.DeletedAt != null) return false;
 

@@ -42,17 +42,39 @@ public class BranchManagementController : ControllerBase
     [HttpPut("courts/{id}/maintenance")]
     public async Task<ActionResult<ApiResponse<bool>>> SetMaintenance(int id, [FromQuery] bool isMaintenance, [FromQuery] string? performerName, CancellationToken cancellationToken)
     {
-        string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
-        bool result = await _branchService.SetCourtMaintenanceStatusAsync(id, isMaintenance, performer, cancellationToken);
-        return Ok(ApiResponse<bool>.Ok(result, isMaintenance ? "Đã chuyển sân sang trạng thái bảo trì." : "Đã mở lại sân hoạt động."));
+        try
+        {
+            string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
+            bool result = await _branchService.SetCourtMaintenanceStatusAsync(id, isMaintenance, performer, cancellationToken);
+            return Ok(ApiResponse<bool>.Ok(result, isMaintenance ? "Đã chuyển sân sang trạng thái bảo trì." : "Đã mở lại sân hoạt động."));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail($"Lỗi khi đổi trạng thái bảo trì: {ex.Message}"));
+        }
     }
 
     [HttpDelete("courts/{id}")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteCourt(int id, [FromQuery] string? performerName, CancellationToken cancellationToken)
     {
-        string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
-        bool result = await _branchService.SoftDeleteCourtAsync(id, performer, cancellationToken);
-        return Ok(ApiResponse<bool>.Ok(result, "Đã xóa mềm sân thi đấu thành công."));
+        try
+        {
+            string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
+            bool result = await _branchService.SoftDeleteCourtAsync(id, performer, cancellationToken);
+            return Ok(ApiResponse<bool>.Ok(result, "Đã xóa mềm sân thi đấu thành công."));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail($"Lỗi khi xóa sân: {ex.Message}"));
+        }
     }
 
     // 2. Bảng giá ca sân
@@ -90,9 +112,20 @@ public class BranchManagementController : ControllerBase
     [HttpPut("services/{id}/stock")]
     public async Task<ActionResult<ApiResponse<bool>>> UpdateStock(int id, [FromQuery] int newStock, [FromQuery] string? performerName, CancellationToken cancellationToken)
     {
-        string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
-        bool result = await _branchService.UpdateStockQuantityAsync(id, newStock, performer, cancellationToken);
-        return Ok(ApiResponse<bool>.Ok(result, "Cập nhật tồn kho thành công."));
+        try
+        {
+            string performer = !string.IsNullOrWhiteSpace(performerName) ? performerName : "Quản lý cơ sở";
+            bool result = await _branchService.UpdateStockQuantityAsync(id, newStock, performer, cancellationToken);
+            return Ok(ApiResponse<bool>.Ok(result, "Cập nhật tồn kho thành công."));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<bool>.Fail($"Lỗi khi cập nhật kho: {ex.Message}"));
+        }
     }
 }
 

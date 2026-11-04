@@ -38,6 +38,30 @@ public class PosService : IPosService
             throw new KeyNotFoundException($"Không tìm thấy đơn đặt với mã hoặc SĐT '{request.BookingCode}'.");
         }
 
+        if (booking.Status == BookingStatus.Holding && booking.HoldExpiresAt != default && booking.HoldExpiresAt < DateTime.UtcNow)
+        {
+            booking.Status = BookingStatus.Expired;
+            await _context.SaveChangesAsync(cancellationToken);
+            throw new InvalidOperationException($"Đơn đặt đã hết thời gian giữ chỗ (Hết hạn lúc {booking.HoldExpiresAt:HH:mm dd/MM/yyyy}), không thể check-in.");
+        }
+
+        if (booking.PlayDate != DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new InvalidOperationException($"Không thể check-in đơn đặt của ngày khác (Ngày đặt: {booking.PlayDate:dd/MM/yyyy}, Ngày hiện tại: {DateTime.Today:dd/MM/yyyy}).");
+        }
+
+        if (booking.Status == BookingStatus.Holding && booking.HoldExpiresAt != default && booking.HoldExpiresAt < DateTime.UtcNow)
+        {
+            booking.Status = BookingStatus.Expired;
+            await _context.SaveChangesAsync(cancellationToken);
+            throw new InvalidOperationException($"Đơn đặt đã hết thời gian giữ chỗ (Hết hạn lúc {booking.HoldExpiresAt:HH:mm dd/MM/yyyy}), không thể check-in.");
+        }
+
+        if (booking.PlayDate != DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new InvalidOperationException($"Không thể check-in đơn đặt của ngày khác (Ngày đặt: {booking.PlayDate:dd/MM/yyyy}, Ngày hiện tại: {DateTime.Today:dd/MM/yyyy}).");
+        }
+
         if (booking.Status != BookingStatus.Confirmed && booking.Status != BookingStatus.Holding)
         {
             throw new InvalidOperationException($"Đơn đặt đang ở trạng thái '{booking.Status}', không thể thực hiện check-in.");
@@ -92,6 +116,11 @@ public class PosService : IPosService
 
     public async Task<BookingServiceDetailDto> AddServiceAsync(PosAddServiceRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.Quantity <= 0)
+        {
+            throw new ArgumentException("Số lượng dịch vụ phải lớn hơn 0.");
+        }
+
         var booking = await _context.Bookings.FindAsync(new object[] { (long)request.BookingId }, cancellationToken);
         if (booking == null)
         {
@@ -175,6 +204,11 @@ public class PosService : IPosService
             throw new KeyNotFoundException($"Không tìm thấy đơn đặt ID {request.BookingId}.");
         }
 
+        if (booking.Status != BookingStatus.CheckedIn)
+        {
+            throw new InvalidOperationException($"Chỉ có thể thanh toán đơn đặt đang ở trạng thái Đang đá (CheckedIn). Trạng thái hiện tại: {booking.Status}.");
+        }
+
         // Bổ sung các dịch vụ tại quầy nếu có
         if (request.AdditionalServices != null && request.AdditionalServices.Any())
         {
@@ -198,6 +232,11 @@ public class PosService : IPosService
         }
 
         decimal finalBalanceDue = Math.Max(0, booking.TotalAmount - booking.DepositAmount);
+
+        if (request.PaymentMethod == PaymentMethod.Cash && request.CashGiven < finalBalanceDue)
+        {
+            throw new InvalidOperationException($"Số tiền khách đưa ({request.CashGiven:N0}đ) không đủ để thanh toán phần còn lại ({finalBalanceDue:N0}đ).");
+        }
 
         // Tạo hóa đơn POS (Invoice)
         string invoiceCode = $"INV-{DateTime.UtcNow:yyyyMMdd}-{booking.Id:D4}";
