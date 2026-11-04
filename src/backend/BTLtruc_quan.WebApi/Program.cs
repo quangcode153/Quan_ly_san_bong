@@ -1,4 +1,5 @@
 using BTLtruc_quan.WebApi.Data;
+using BTLtruc_quan.WebApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 // 2. Đăng ký Services & Controllers
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<IPosService, PosService>();
+builder.Services.AddScoped<IBranchManagementService, BranchManagementService>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

@@ -55,9 +55,11 @@ public class AddServiceToBookingRequest
 public class CheckoutPosRequest
 {
     public int BookingId { get; set; }
+    public string PerformerName { get; set; } = string.Empty; // Tên nhân viên trực quầy (Mục 1.4)
     public List<AddServiceToBookingRequest> AdditionalServices { get; set; } = new();
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
     public decimal CashGiven { get; set; } // Số tiền khách đưa tại quầy
+    public decimal DiscountAmount { get; set; } = 0;
     public string? Notes { get; set; }
 }
 
@@ -74,10 +76,14 @@ public class InvoiceDto
     
     public decimal CourtFee { get; set; }
     public decimal ServiceFee { get; set; }
-    public decimal TotalAmount => CourtFee + ServiceFee;
+    public decimal DiscountAmount { get; set; }
+    public decimal TotalAmount => CourtFee + ServiceFee - DiscountAmount;
     
     public decimal DepositPaid { get; set; }
-    public decimal FinalPaid => TotalAmount - DepositPaid;
+    public decimal FinalPaid => Math.Max(0, TotalAmount - DepositPaid);
+    
+    public decimal CashGiven { get; set; }
+    public decimal CashReturn => Math.Max(0, CashGiven - FinalPaid);
     
     public PaymentMethod PaymentMethod { get; set; }
     public string PaymentMethodName => PaymentMethod.ToString();
