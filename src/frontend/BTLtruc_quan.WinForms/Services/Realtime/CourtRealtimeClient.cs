@@ -65,7 +65,53 @@ public class CourtRealtimeClient : IAsyncDisposable
                 OnCellUpdated?.Invoke(cell);
             });
 
-            // 3. Xử lý các trạng thái kết nối
+            // 3. Lắng nghe các sự kiện nghiệp vụ chuẩn theo tài liệu W2_AUTH_RBAC_SIGNALR_WORKER_SPEC:
+            _hubConnection.On<int, int, string?>("CourtSlotLocked", (courtId, timeSlotId, bookingCode) =>
+            {
+                OnCellUpdated?.Invoke(new CourtTimeSlotCellDto
+                {
+                    CourtId = courtId,
+                    TimeSlotId = timeSlotId,
+                    VisualStatus = "Held",
+                    BookingCode = bookingCode
+                });
+            });
+
+            _hubConnection.On<int, int>("CourtSlotReleased", (courtId, timeSlotId) =>
+            {
+                OnCellUpdated?.Invoke(new CourtTimeSlotCellDto
+                {
+                    CourtId = courtId,
+                    TimeSlotId = timeSlotId,
+                    VisualStatus = "Available",
+                    BookingCode = null,
+                    CustomerName = null
+                });
+            });
+
+            _hubConnection.On<int, int, string, string?>("BookingConfirmed", (courtId, timeSlotId, bookingCode, customerName) =>
+            {
+                OnCellUpdated?.Invoke(new CourtTimeSlotCellDto
+                {
+                    CourtId = courtId,
+                    TimeSlotId = timeSlotId,
+                    VisualStatus = "Confirmed",
+                    BookingCode = bookingCode,
+                    CustomerName = customerName
+                });
+            });
+
+            _hubConnection.On<int, int>("CourtCheckedIn", (courtId, timeSlotId) =>
+            {
+                OnCellUpdated?.Invoke(new CourtTimeSlotCellDto
+                {
+                    CourtId = courtId,
+                    TimeSlotId = timeSlotId,
+                    VisualStatus = "InUse"
+                });
+            });
+
+            // 4. Xử lý các trạng thái kết nối
             _hubConnection.Reconnecting += error =>
             {
                 OnConnectionStateChanged?.Invoke(false, "Đang thử kết nối lại với máy chủ SignalR...");
@@ -124,4 +170,3 @@ public class CourtRealtimeClient : IAsyncDisposable
         }
     }
 }
-

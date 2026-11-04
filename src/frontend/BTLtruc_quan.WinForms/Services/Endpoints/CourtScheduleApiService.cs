@@ -9,12 +9,11 @@ namespace BTLtruc_quan.WinForms.Services.Endpoints;
 public class CourtScheduleApiService : BaseApiClient
 {
     /// <summary>
-    /// Lấy ma trận sân và khung giờ trực quan theo Chi nhánh và Ngày chọn
+    /// Lấy ma trận sân và khung giờ trực quan theo Chi nhánh và Ngày chọn (GET /api/courts/grid)
     /// </summary>
     public static async Task<CourtGridResponseDto> GetCourtMatrixAsync(int branchId, DateTime date, CancellationToken cancellationToken = default)
     {
-        string endpoint = $"courts/matrix?branchId={branchId}&date={date:yyyy-MM-dd}";
+        string endpoint = $"courts/grid?branchId={branchId}&date={date:yyyy-MM-dd}";
         return await GetAsync<CourtGridResponseDto>(endpoint, cancellationToken);
     }
 }
-

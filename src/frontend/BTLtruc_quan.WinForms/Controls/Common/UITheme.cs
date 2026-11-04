@@ -64,9 +64,9 @@ public static class UITheme
         return status.Trim().ToLowerInvariant() switch
         {
             "available" or "trong" or "santrong" => StatusAvailable,
-            "pendingpayment" or "chococ" or "cho" => StatusPendingPayment,
-            "confirmed" or "daxacnhan" or "daco" => StatusConfirmed,
-            "inuse" or "dangthidau" or "dangda" => StatusInUse,
+            "pendingpayment" or "held" or "chococ" or "cho" => StatusPendingPayment,
+            "confirmed" or "booked" or "daxacnhan" or "daco" => StatusConfirmed,
+            "inuse" or "checkedin" or "dangthidau" or "dangda" => StatusInUse,
             "maintenance" or "baotri" or "khoa" => StatusMaintenance,
             "cancelled" or "dahuy" => ColorTranslator.FromHtml("#64748B"),
             _ => Primary
@@ -84,9 +84,9 @@ public static class UITheme
         return status.Trim().ToLowerInvariant() switch
         {
             "available" or "trong" or "santrong" => StatusAvailableLight,
-            "pendingpayment" or "chococ" or "cho" => StatusPendingPaymentLight,
-            "confirmed" or "daxacnhan" or "daco" => StatusConfirmedLight,
-            "inuse" or "dangthidau" or "dangda" => StatusInUseLight,
+            "pendingpayment" or "held" or "chococ" or "cho" => StatusPendingPaymentLight,
+            "confirmed" or "booked" or "daxacnhan" or "daco" => StatusConfirmedLight,
+            "inuse" or "checkedin" or "dangthidau" or "dangda" => StatusInUseLight,
             "maintenance" or "baotri" or "khoa" => StatusMaintenanceLight,
             "cancelled" or "dahuy" => ColorTranslator.FromHtml("#F1F5F9"),
             _ => PrimaryLight
