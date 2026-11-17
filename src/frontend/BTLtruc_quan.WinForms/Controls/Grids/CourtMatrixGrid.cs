@@ -39,6 +39,8 @@ public class CourtMatrixGrid : ScrollableControl
     // Events
     public event EventHandler<CourtCellClickedEventArgs>? CellClicked;
     public event EventHandler<CourtCellClickedEventArgs>? CellDoubleClicked;
+    public event EventHandler<CourtCellClickedEventArgs>? BookingRequested;
+    public event EventHandler<CourtCellClickedEventArgs>? PosActionRequested;
     public event EventHandler<CourtSelectionChangedEventArgs>? SelectionChanged;
 
     public CourtMatrixGrid()
@@ -761,7 +763,18 @@ public class CourtMatrixGrid : ScrollableControl
                 var cell = _data.Rows[r].Cells[c];
                 var row = _data.Rows[r];
                 var timeSlot = _data.TimeSlots[c];
-                CellDoubleClicked?.Invoke(this, new CourtCellClickedEventArgs(cell, row, timeSlot, MouseButtons.Left));
+                var args = new CourtCellClickedEventArgs(cell, row, timeSlot, MouseButtons.Left);
+                
+                CellDoubleClicked?.Invoke(this, args);
+
+                if (string.Equals(cell.VisualStatus, "Available", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(cell.VisualStatus))
+                {
+                    BookingRequested?.Invoke(this, args);
+                }
+                else if (!string.Equals(cell.VisualStatus, "Maintenance", StringComparison.OrdinalIgnoreCase))
+                {
+                    PosActionRequested?.Invoke(this, args);
+                }
             }
         }
     }

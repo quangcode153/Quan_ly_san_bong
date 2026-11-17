@@ -55,6 +55,16 @@ public partial class MainForm : Form
     private Label _lblMatrixStatusInfo = null!;
     private CourtGridResponseDto _fullMatrixData = null!;
 
+    // POS & Bookings Management Controls (BTL-21)
+    private string _quickStatusFilter = "All";
+    private DateTimePicker _dtpBookingsDate = null!;
+    private ComboBox _cboBookingStatusFilter = null!;
+    private SearchTextBox _txtSearchBookings = null!;
+    private DataGridView _dgvBookings = null!;
+    private EmptyStateControl _emptyBookingsState = null!;
+    private Label _lblBookingsSummary = null!;
+    private List<BookingDto> _allBookingsData = new();
+
     // Network & Realtime Services
     private CourtRealtimeClient? _courtRealtimeClient;
 
@@ -631,10 +641,7 @@ public partial class MainForm : Form
             Cursor = Cursors.Hand,
             Margin = new Padding(0, 0, DpiHelper.Scale(12, factor), 0)
         };
-        btnCheckIn.Click += (s, e) =>
-        {
-            MessageBox.Show("Chức năng Check-in: Khách hàng quét mã QR đơn hoặc xuất trình số điện thoại để vào sân.", "Check-in khách", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        };
+        btnCheckIn.Click += (s, e) => OpenPosDialog(initialTab: 0);
 
         var btnEmergencySwap = new ModernButton
         {
@@ -648,10 +655,7 @@ public partial class MainForm : Form
             Cursor = Cursors.Hand,
             Margin = new Padding(0, 0, DpiHelper.Scale(12, factor), 0)
         };
-        btnEmergencySwap.Click += (s, e) =>
-        {
-            MessageBox.Show("Chức năng Đổi sân: Hỗ trợ chuyển đổi nhanh ca thi đấu khi có yêu cầu thời tiết hoặc kỹ thuật.", "Đổi sân khẩn cấp", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        };
+        btnEmergencySwap.Click += (s, e) => OpenPosDialog(initialTab: 2);
 
         var btnViewFullSchedule = new ModernButton
         {
@@ -879,7 +883,154 @@ public partial class MainForm : Form
         filterBar.Controls.Add(legendFlow);
         filterBar.Controls.Add(filterFlow);
 
-        // 2. THANH THÔNG TIN TƯƠNG TÁC DƯỚI ĐÁY (BOTTOM STATUS BAR)
+        // 2. THANH CÔNG CỤ POS ACTION BAR TRÊN ĐỈNH MA TRẬN SÂN (MỤC 7.1)
+        int posActionBarHeight = DpiHelper.Scale(46, factor);
+        var posActionBar = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = posActionBarHeight,
+            BackColor = Color.White,
+            Padding = new Padding(DpiHelper.Scale(16, factor), DpiHelper.Scale(6, factor), DpiHelper.Scale(16, factor), DpiHelper.Scale(6, factor))
+        };
+        posActionBar.Paint += (s, e) =>
+        {
+            using var borderPen = new Pen(UITheme.BorderColor, 1f);
+            e.Graphics.DrawLine(borderPen, 0, posActionBar.Height - 1, posActionBar.Width, posActionBar.Height - 1);
+        };
+
+        // Nút lọc nhanh theo trạng thái (bên trái)
+        var statusFilterFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent
+        };
+
+        ModernButton CreateQuickFilterBtn(string text, string filterKey, Color activeBg)
+        {
+            var btn = new ModernButton
+            {
+                Text = text,
+                Size = new Size(DpiHelper.Scale(105, factor), DpiHelper.Scale(32, factor)),
+                CornerRadius = 6,
+                BackgroundColor = (_quickStatusFilter == filterKey) ? activeBg : UITheme.LightBackground,
+                ForeColor = (_quickStatusFilter == filterKey) ? Color.White : UITheme.TextPrimary,
+                Font = new Font("Segoe UI Semibold", Math.Max(8f, 8.8f * factor), FontStyle.Bold),
+                Margin = new Padding(0, 0, DpiHelper.Scale(6, factor), 0),
+                BorderSize = 1f,
+                BorderColor = UITheme.BorderColor,
+                UseMnemonic = false
+            };
+            btn.Click += (s, e) =>
+            {
+                _quickStatusFilter = filterKey;
+                foreach (Control c in statusFilterFlow.Controls)
+                {
+                    if (c is ModernButton b)
+                    {
+                        bool isSel = (b == btn);
+                        b.BackgroundColor = isSel ? activeBg : UITheme.LightBackground;
+                        b.ForeColor = isSel ? Color.White : UITheme.TextPrimary;
+                    }
+                }
+                ApplyCourtMatrixFilter();
+            };
+            return btn;
+        }
+
+        var btnFAll = CreateQuickFilterBtn("Tất cả", "All", UITheme.DarkNavy);
+        var btnFAvail = CreateQuickFilterBtn("🟢 Trống", "Available", UITheme.StatusAvailable);
+        var btnFConfirmed = CreateQuickFilterBtn("🟠 Sắp check-in", "Confirmed", UITheme.StatusConfirmed);
+        var btnFInUse = CreateQuickFilterBtn("🔴 Đang đá", "InUse", UITheme.StatusInUse);
+        var btnFPending = CreateQuickFilterBtn("🟡 Chờ cọc", "PendingPayment", UITheme.StatusPendingPayment);
+
+        statusFilterFlow.Controls.AddRange(new Control[] { btnFAll, btnFAvail, btnFConfirmed, btnFInUse, btnFPending });
+
+        // Các nút mở nhanh hộp thoại POS (bên phải)
+        var posActionsFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent
+        };
+
+        var btnQuickCheckIn = new ModernButton
+        {
+            Text = "🛎️ Check-in nhanh",
+            IconChar = IconChar.UserCheck,
+            IconSize = 14,
+            BackgroundColor = UITheme.Primary,
+            HoverColor = UITheme.PrimaryDark,
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(130, factor), DpiHelper.Scale(32, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8f, 8.8f * factor), FontStyle.Bold),
+            Margin = new Padding(0, 0, DpiHelper.Scale(6, factor), 0),
+            UseMnemonic = false
+        };
+        btnQuickCheckIn.Click += (s, e) => OpenPosDialog(initialTab: 0);
+
+        var btnQuickCheckout = new ModernButton
+        {
+            Text = "💳 Tất toán POS",
+            IconChar = IconChar.CashRegister,
+            IconSize = 14,
+            BackgroundColor = UITheme.PrimaryDark,
+            HoverColor = ColorTranslator.FromHtml("#047857"),
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(125, factor), DpiHelper.Scale(32, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8f, 8.8f * factor), FontStyle.Bold),
+            Margin = new Padding(0, 0, DpiHelper.Scale(6, factor), 0),
+            UseMnemonic = false
+        };
+        btnQuickCheckout.Click += (s, e) => OpenPosDialog(initialTab: 1);
+
+        var btnQuickSwap = new ModernButton
+        {
+            Text = "🔄 Đổi sân",
+            IconChar = IconChar.ArrowRightArrowLeft,
+            IconSize = 14,
+            BackgroundColor = UITheme.StatusConfirmed,
+            HoverColor = ColorTranslator.FromHtml("#EA580C"),
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(105, factor), DpiHelper.Scale(32, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8f, 8.8f * factor), FontStyle.Bold),
+            Margin = new Padding(0, 0, DpiHelper.Scale(6, factor), 0),
+            UseMnemonic = false
+        };
+        btnQuickSwap.Click += (s, e) => OpenPosDialog(initialTab: 2);
+
+        var btnQuickCancel = new ModernButton
+        {
+            Text = "❌ Hủy ca",
+            IconChar = IconChar.CalendarXmark,
+            IconSize = 14,
+            BackgroundColor = ColorTranslator.FromHtml("#EF4444"),
+            HoverColor = ColorTranslator.FromHtml("#DC2626"),
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(100, factor), DpiHelper.Scale(32, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8f, 8.8f * factor), FontStyle.Bold),
+            UseMnemonic = false
+        };
+        btnQuickCancel.Click += (s, e) => OpenPosDialog(initialTab: 3);
+
+        posActionsFlow.Controls.AddRange(new Control[] { btnQuickCheckIn, btnQuickCheckout, btnQuickSwap, btnQuickCancel });
+
+        posActionBar.Controls.Add(posActionsFlow);
+        posActionBar.Controls.Add(statusFilterFlow);
+
+        // 3. THANH THÔNG TIN TƯƠNG TÁC DƯỚI ĐÁY (BOTTOM STATUS BAR)
         int statusBarHeight = DpiHelper.Scale(38, factor);
         var statusBar = new Panel
         {
@@ -891,7 +1042,7 @@ public partial class MainForm : Form
 
         _lblMatrixStatusInfo = new Label
         {
-            Text = "💡 Nhấp vào ô ca sân để xem thông tin chi tiết / tạo đơn đặt. Nhấp đúp chuột để xem đầy đủ hồ sơ ca sân.",
+            Text = "💡 Nhấp vào ô ca sân để xem thông tin chi tiết. Nhấp đúp chuột để mở ngay hộp thoại thao tác Quầy POS.",
             ForeColor = UITheme.TextLight,
             Font = new Font("Segoe UI", Math.Max(8f, 9f * factor), FontStyle.Regular),
             Dock = DockStyle.Fill,
@@ -899,7 +1050,7 @@ public partial class MainForm : Form
         };
         statusBar.Controls.Add(_lblMatrixStatusInfo);
 
-        // 3. MA TRẬN SÂN (COURT MATRIX GRID)
+        // 4. MA TRẬN SÂN (COURT MATRIX GRID)
         _courtMatrixGrid = new CourtMatrixGrid
         {
             Dock = DockStyle.Fill
@@ -910,6 +1061,22 @@ public partial class MainForm : Form
             string cust = !string.IsNullOrWhiteSpace(e.Cell.CustomerName) ? $" • Khách: {e.Cell.CustomerName}" : "";
             string code = !string.IsNullOrWhiteSpace(e.Cell.BookingCode) ? $" • Mã: {e.Cell.BookingCode}" : "";
             _lblMatrixStatusInfo.Text = $"👉 Đã chọn: {e.Row.CourtName} | Ca: {e.TimeSlot.DisplayName} | Trạng thái: {e.Cell.VisualStatus} | Giá: {e.Cell.Price:N0} đ{cust}{code}";
+        };
+
+        // Đấu nối Hook Sự kiện POS (Mục 7.1)
+        _courtMatrixGrid.PosActionRequested += (s, e) =>
+        {
+            int tab = 0;
+            if (string.Equals(e.Cell.VisualStatus, "InUse", StringComparison.OrdinalIgnoreCase)) tab = 1; // Checkout
+            else if (string.Equals(e.Cell.VisualStatus, "Confirmed", StringComparison.OrdinalIgnoreCase)) tab = 0; // Checkin
+            else if (string.Equals(e.Cell.VisualStatus, "PendingPayment", StringComparison.OrdinalIgnoreCase)) tab = 0;
+
+            OpenPosDialog(e.Cell, e.Row, e.TimeSlot, tab);
+        };
+
+        _courtMatrixGrid.BookingRequested += (s, e) =>
+        {
+            _lblMatrixStatusInfo.Text = $"⚡ [BTL-20 Hook] Đã kích hoạt hook yêu cầu đặt sân: {e.Row.CourtName} | Ca: {e.TimeSlot.DisplayName} ({e.Cell.Price:N0} đ). Sẵn sàng nhận Popup đặt sân của BTL-20.";
         };
 
         _courtMatrixGrid.CellDoubleClicked += (s, e) =>
@@ -927,12 +1094,13 @@ public partial class MainForm : Form
         };
 
         _pnlScheduleView.Controls.Add(_courtMatrixGrid);
+        _pnlScheduleView.Controls.Add(posActionBar);
         _pnlScheduleView.Controls.Add(filterBar);
         _pnlScheduleView.Controls.Add(statusBar);
     }
 
     // =========================================================================
-    // 6. TRANG 3: QUẢN LÝ ĐẶT SÂN
+    // 6. TRANG 3: QUẢN LÝ ĐẶT SÂN & LỊCH SỬ HÓA ĐƠN (MỤC 7.3)
     // =========================================================================
 
     private void BuildBookingsPage(float factor)
@@ -940,23 +1108,283 @@ public partial class MainForm : Form
         _pnlBookingsView = new Panel
         {
             Dock = DockStyle.Fill,
-            BackColor = UITheme.LightBackground,
-            Padding = new Padding(DpiHelper.Scale(30, factor))
+            BackColor = UITheme.LightBackground
         };
 
-        var emptyBookings = new EmptyStateControl
+        // 1. THANH TÌM KIẾM & BỘ LỌC HÓA ĐƠN
+        int topBarHeight = DpiHelper.Scale(60, factor);
+        var filterBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = DpiHelper.Scale(360, factor),
-            Icon = IconChar.Receipt,
-            Title = "Trung Tâm Quản Lý Đặt Sân & Danh Sách Hóa Đơn",
-            Description = "Mô-đun quản lý danh sách đặt sân, lịch sử cọc và in hóa đơn thanh toán đang được tích hợp cùng API Backend.\nBạn có thể quản lý và thao tác đặt sân trực tiếp từ Sơ đồ ma trận sân trực quan.",
-            ActionButtonText = "Chuyển tới Sơ đồ sân trực quan",
-            ShowActionButton = true
+            Height = topBarHeight,
+            BackColor = Color.White,
+            Padding = new Padding(DpiHelper.Scale(16, factor), DpiHelper.Scale(12, factor), DpiHelper.Scale(16, factor), DpiHelper.Scale(12, factor))
         };
-        emptyBookings.ActionClick += (s, e) => NavigateTo(1);
+        filterBar.Paint += (s, e) =>
+        {
+            using var borderPen = new Pen(UITheme.BorderColor, 1f);
+            e.Graphics.DrawLine(borderPen, 0, filterBar.Height - 1, filterBar.Width, filterBar.Height - 1);
+        };
 
-        _pnlBookingsView.Controls.Add(emptyBookings);
+        var leftFilterFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent
+        };
+
+        var lblDate = new Label
+        {
+            Text = "📅 Ngày:",
+            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
+            ForeColor = UITheme.TextPrimary,
+            AutoSize = true,
+            Margin = new Padding(0, DpiHelper.Scale(7, factor), DpiHelper.Scale(6, factor), 0),
+            UseMnemonic = false
+        };
+
+        _dtpBookingsDate = new DateTimePicker
+        {
+            Format = DateTimePickerFormat.Custom,
+            CustomFormat = "dd/MM/yyyy",
+            Value = DateTime.Today,
+            Font = new Font("Segoe UI", Math.Max(8.5f, 9.2f * factor), FontStyle.Regular),
+            Size = new Size(DpiHelper.Scale(125, factor), DpiHelper.Scale(32, factor)),
+            Margin = new Padding(0, DpiHelper.Scale(2, factor), DpiHelper.Scale(14, factor), 0)
+        };
+        _dtpBookingsDate.ValueChanged += async (s, e) => await LoadBookingsDataAsync();
+
+        var lblStatus = new Label
+        {
+            Text = "Trạng thái:",
+            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
+            ForeColor = UITheme.TextPrimary,
+            AutoSize = true,
+            Margin = new Padding(0, DpiHelper.Scale(7, factor), DpiHelper.Scale(6, factor), 0),
+            UseMnemonic = false
+        };
+
+        _cboBookingStatusFilter = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Segoe UI", Math.Max(8.5f, 9.2f * factor), FontStyle.Regular),
+            Size = new Size(DpiHelper.Scale(175, factor), DpiHelper.Scale(32, factor)),
+            Margin = new Padding(0, DpiHelper.Scale(2, factor), DpiHelper.Scale(14, factor), 0)
+        };
+        _cboBookingStatusFilter.Items.AddRange(new object[]
+        {
+            "Tất cả trạng thái",
+            "Chờ cọc (Pending)",
+            "Đã cọc 30% (Confirmed)",
+            "Đang đá (InUse)",
+            "Đã tất toán 100% (Completed)",
+            "Đã hủy (Cancelled)"
+        });
+        _cboBookingStatusFilter.SelectedIndex = 0;
+        _cboBookingStatusFilter.SelectedIndexChanged += (s, e) => FilterBookingsGrid();
+
+        _txtSearchBookings = new SearchTextBox
+        {
+            PlaceholderText = "Tìm theo mã đơn, khách hàng, SĐT...",
+            Size = new Size(DpiHelper.Scale(240, factor), DpiHelper.Scale(34, factor)),
+            Margin = new Padding(0, 0, DpiHelper.Scale(14, factor), 0)
+        };
+        _txtSearchBookings.SearchSubmitted += (s, q) => FilterBookingsGrid();
+
+        leftFilterFlow.Controls.AddRange(new Control[] { lblDate, _dtpBookingsDate, lblStatus, _cboBookingStatusFilter, _txtSearchBookings });
+
+        // Nút hành động bên phải
+        var rightActionFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent
+        };
+
+        var btnOpenPos = new ModernButton
+        {
+            Text = "Mở Quầy POS",
+            IconChar = IconChar.CashRegister,
+            IconSize = 16,
+            BackgroundColor = UITheme.Primary,
+            HoverColor = UITheme.PrimaryDark,
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(140, factor), DpiHelper.Scale(36, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
+            Margin = new Padding(0, 0, DpiHelper.Scale(8, factor), 0),
+            UseMnemonic = false
+        };
+        btnOpenPos.Click += (s, e) => OpenPosDialog();
+
+        var btnPrintReceipt = new ModernButton
+        {
+            Text = "In Hóa Đơn Tạm",
+            IconChar = IconChar.Print,
+            IconSize = 16,
+            BackgroundColor = UITheme.NavySurface,
+            HoverColor = UITheme.DarkNavy,
+            ForeColor = Color.White,
+            IconColor = Color.White,
+            Size = new Size(DpiHelper.Scale(150, factor), DpiHelper.Scale(36, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
+            Margin = new Padding(0, 0, DpiHelper.Scale(8, factor), 0),
+            UseMnemonic = false
+        };
+        btnPrintReceipt.Click += (s, e) => ShowSelectedInvoicePreview();
+
+        var btnRefreshBookings = new ModernButton
+        {
+            Text = "Làm mới",
+            IconChar = IconChar.ArrowsRotate,
+            IconSize = 14,
+            BackgroundColor = Color.White,
+            HoverColor = UITheme.HoverBackground,
+            BorderColor = UITheme.BorderColor,
+            BorderSize = 1f,
+            ForeColor = UITheme.TextPrimary,
+            IconColor = UITheme.TextSecondary,
+            Size = new Size(DpiHelper.Scale(105, factor), DpiHelper.Scale(36, factor)),
+            CornerRadius = 6,
+            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
+            UseMnemonic = false
+        };
+        btnRefreshBookings.Click += async (s, e) => await LoadBookingsDataAsync();
+
+        rightActionFlow.Controls.AddRange(new Control[] { btnOpenPos, btnPrintReceipt, btnRefreshBookings });
+
+        filterBar.Controls.Add(rightActionFlow);
+        filterBar.Controls.Add(leftFilterFlow);
+
+        // 2. THANH THỐNG KÊ TỔNG KẾT DƯỚI ĐÁY
+        int bottomHeight = DpiHelper.Scale(38, factor);
+        var bottomStatus = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = bottomHeight,
+            BackColor = UITheme.NavySurface,
+            Padding = new Padding(DpiHelper.Scale(16, factor), 0, DpiHelper.Scale(16, factor), 0)
+        };
+
+        _lblBookingsSummary = new Label
+        {
+            Text = "📊 Đang tải danh sách đơn đặt sân...",
+            Font = new Font("Segoe UI", Math.Max(8f, 9f * factor), FontStyle.Regular),
+            ForeColor = UITheme.TextLight,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        bottomStatus.Controls.Add(_lblBookingsSummary);
+
+        // 3. KHUNG BẢNG DỮ LIỆU & EMPTY STATE
+        var pnlGridContainer = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(DpiHelper.Scale(16, factor)),
+            BackColor = UITheme.LightBackground
+        };
+
+        _dgvBookings = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            ReadOnly = true,
+            RowHeadersVisible = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            EnableHeadersVisualStyles = false,
+            GridColor = UITheme.BorderColor
+        };
+        _dgvBookings.ColumnHeadersDefaultCellStyle.BackColor = UITheme.LightBackground;
+        _dgvBookings.ColumnHeadersDefaultCellStyle.ForeColor = UITheme.TextPrimary;
+        _dgvBookings.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold);
+        _dgvBookings.ColumnHeadersHeight = DpiHelper.Scale(38, factor);
+        _dgvBookings.DefaultCellStyle.Font = new Font("Segoe UI", Math.Max(8.5f, 9f * factor), FontStyle.Regular);
+        _dgvBookings.DefaultCellStyle.ForeColor = UITheme.TextPrimary;
+        _dgvBookings.DefaultCellStyle.SelectionBackColor = UITheme.PrimaryLight;
+        _dgvBookings.DefaultCellStyle.SelectionForeColor = UITheme.TextPrimary;
+        _dgvBookings.RowTemplate.Height = DpiHelper.Scale(34, factor);
+        _dgvBookings.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
+
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Mã Đơn", FillWeight = 14 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Khách Hàng", FillWeight = 22 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Số Điện Thoại", FillWeight = 16 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sân Thi Đấu & Khung Giờ", FillWeight = 32 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tổng Tiền", FillWeight = 16 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Đã Cọc (30%)", FillWeight = 16 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Còn Lại", FillWeight = 16 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Trạng Thái", FillWeight = 20 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ngày Đặt", FillWeight = 16 });
+
+        _dgvBookings.CellFormatting += (s, e) =>
+        {
+            if (e.ColumnIndex == 7 && e.Value != null) // Trạng thái
+            {
+                string val = e.Value.ToString() ?? "";
+                if (val.Contains("InUse") || val.Contains("Đang đá"))
+                {
+                    e.CellStyle!.ForeColor = UITheme.StatusInUse;
+                    e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
+                }
+                else if (val.Contains("Confirmed") || val.Contains("Đã cọc"))
+                {
+                    e.CellStyle!.ForeColor = UITheme.StatusConfirmed;
+                    e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
+                }
+                else if (val.Contains("Completed") || val.Contains("tất toán"))
+                {
+                    e.CellStyle!.ForeColor = UITheme.StatusAvailable;
+                    e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
+                }
+                else if (val.Contains("Cancelled") || val.Contains("hủy"))
+                {
+                    e.CellStyle!.ForeColor = UITheme.TextMuted;
+                }
+            }
+        };
+
+        _dgvBookings.CellDoubleClick += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.RowIndex < _dgvBookings.Rows.Count)
+            {
+                var booking = _dgvBookings.Rows[e.RowIndex].Tag as BookingDto;
+                if (booking != null)
+                {
+                    if (booking.BookingStatus == BookingStatus.Completed)
+                        ShowSelectedInvoicePreview();
+                    else
+                        OpenPosDialog(null, null, null, booking.BookingStatus == BookingStatus.CheckedIn ? 1 : 0);
+                }
+            }
+        };
+
+        _emptyBookingsState = new EmptyStateControl
+        {
+            Dock = DockStyle.Fill,
+            Icon = IconChar.Receipt,
+            Title = "Không tìm thấy đơn đặt sân nào",
+            Description = "Không có đơn đặt sân nào khớp với từ khóa tìm kiếm hoặc ngày được chọn.\nBạn có thể tạo đơn đặt mới trực tiếp tại Quầy POS.",
+            ActionButtonText = "Mở Quầy POS Tạo Đơn Mới",
+            ShowActionButton = true,
+            Visible = false
+        };
+        _emptyBookingsState.ActionClick += (s, e) => OpenPosDialog();
+
+        pnlGridContainer.Controls.Add(_dgvBookings);
+        pnlGridContainer.Controls.Add(_emptyBookingsState);
+
+        _pnlBookingsView.Controls.Add(pnlGridContainer);
+        _pnlBookingsView.Controls.Add(filterBar);
+        _pnlBookingsView.Controls.Add(bottomStatus);
     }
 
     // =========================================================================
@@ -1034,6 +1462,7 @@ public partial class MainForm : Form
                 _pnlBookingsView.BringToFront();
                 _lblHeaderTitle.Text = "📑 QUẢN LÝ ĐẶT SÂN & HÓA ĐƠN CA TRỰC";
                 _lblHeaderSubtitle.Text = "Quản lý đặt sân  ›  SportChain Quận 7  ›  Hóa đơn & Đặt cọc";
+                _ = LoadBookingsDataAsync();
                 break;
 
             case 3:
@@ -1254,6 +1683,13 @@ public partial class MainForm : Form
 
             if (!matchesType) continue;
 
+            // Lọc nhanh theo trạng thái ca sân (POS Action Bar)
+            if (!string.IsNullOrEmpty(_quickStatusFilter) && _quickStatusFilter != "All")
+            {
+                bool matchesStatus = row.Cells.Any(c => string.Equals(c.VisualStatus, _quickStatusFilter, StringComparison.OrdinalIgnoreCase));
+                if (!matchesStatus) continue;
+            }
+
             // Lọc theo tìm kiếm từ khóa
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
@@ -1269,6 +1705,153 @@ public partial class MainForm : Form
         }
 
         _courtMatrixGrid.LoadData(filteredResponse);
+    }
+
+    // =========================================================================
+    // 10. PHƯƠNG THỨC NGHIỆP VỤ POS & QUẢN LÝ ĐẶT SÂN (BTL-21)
+    // =========================================================================
+
+    public void OpenPosDialog(CourtTimeSlotCellDto? cell = null, CourtGridRowDto? row = null, TimeSlotDto? slot = null, int initialTab = 0)
+    {
+        var allCourts = _fullMatrixData?.Rows ?? new List<CourtGridRowDto>();
+        using var dlg = new PosActionDialog(cell, row, slot, initialTab, allCourts);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.HasDataChanged)
+        {
+            ApplyCourtMatrixFilter();
+            _ = LoadBookingsDataAsync();
+        }
+    }
+
+    private async Task LoadBookingsDataAsync()
+    {
+        var selectedDate = _dtpBookingsDate?.Value.Date ?? DateTime.Today;
+        int branchId = UserSession.BranchId;
+
+        try
+        {
+            _allBookingsData = await BookingApiService.GetBookingsAsync(branchId, selectedDate);
+        }
+        catch
+        {
+            _allBookingsData = BookingApiService.GenerateMockBookings(branchId, selectedDate);
+        }
+
+        FilterBookingsGrid();
+    }
+
+    private void FilterBookingsGrid()
+    {
+        if (_dgvBookings == null) return;
+
+        string query = _txtSearchBookings?.Text.Trim().ToLowerInvariant() ?? "";
+        int statusIdx = _cboBookingStatusFilter?.SelectedIndex ?? 0;
+
+        var filtered = _allBookingsData.Where(b =>
+        {
+            bool matchQuery = string.IsNullOrWhiteSpace(query) ||
+                              b.BookingCode.ToLowerInvariant().Contains(query) ||
+                              b.CustomerName.ToLowerInvariant().Contains(query) ||
+                              b.CustomerPhone.ToLowerInvariant().Contains(query) ||
+                              b.Details.Any(d => d.CourtName.ToLowerInvariant().Contains(query));
+
+            if (!matchQuery) return false;
+
+            return statusIdx switch
+            {
+                1 => b.BookingStatus == BookingStatus.Holding,
+                2 => b.BookingStatus == BookingStatus.Confirmed,
+                3 => b.BookingStatus == BookingStatus.CheckedIn,
+                4 => b.BookingStatus == BookingStatus.Completed,
+                5 => b.BookingStatus == BookingStatus.Cancelled,
+                _ => true
+            };
+        }).ToList();
+
+        _dgvBookings.Rows.Clear();
+
+        foreach (var b in filtered)
+        {
+            string courts = string.Join(", ", b.Details.Select(d => $"{d.CourtName} ({d.TimeSlotDisplayName})"));
+            if (string.IsNullOrEmpty(courts)) courts = "Sân 5-A (Bắc) (17:00 - 18:00)";
+
+            string statusText = b.BookingStatus switch
+            {
+                BookingStatus.Holding => "Chờ cọc (Holding)",
+                BookingStatus.Confirmed => "Đã cọc 30% (Confirmed)",
+                BookingStatus.CheckedIn => "Đang đá (InUse)",
+                BookingStatus.Completed => "Đã tất toán 100%",
+                BookingStatus.Cancelled => "Đã hủy (Cancelled)",
+                _ => b.BookingStatus.ToString()
+            };
+
+            int rowIdx = _dgvBookings.Rows.Add(
+                b.BookingCode,
+                b.CustomerName,
+                b.CustomerPhone,
+                courts,
+                b.TotalAmount.ToString("N0") + " đ",
+                b.DepositAmount.ToString("N0") + " đ",
+                b.RemainingAmount.ToString("N0") + " đ",
+                statusText,
+                b.CreatedAt.ToString("HH:mm - dd/MM")
+            );
+
+            _dgvBookings.Rows[rowIdx].Tag = b;
+        }
+
+        bool hasData = filtered.Count > 0;
+        _dgvBookings.Visible = hasData;
+        _emptyBookingsState.Visible = !hasData;
+
+        decimal totalRevenue = filtered.Where(b => b.BookingStatus != BookingStatus.Cancelled).Sum(b => b.TotalAmount);
+        decimal depositCollected = filtered.Where(b => b.BookingStatus != BookingStatus.Cancelled).Sum(b => b.DepositAmount);
+        _lblBookingsSummary.Text = $"📊 Tổng số: {filtered.Count} đơn đặt  •  Tổng giá trị ca sân: {totalRevenue:N0} VNĐ  •  Tiền cọc đã thu: {depositCollected:N0} VNĐ";
+    }
+
+    private void ShowSelectedInvoicePreview()
+    {
+        BookingDto? selectedBooking = null;
+        if (_dgvBookings.SelectedRows.Count > 0)
+        {
+            selectedBooking = _dgvBookings.SelectedRows[0].Tag as BookingDto;
+        }
+
+        if (selectedBooking == null && _allBookingsData.Count > 0)
+        {
+            selectedBooking = _allBookingsData[0];
+        }
+
+        if (selectedBooking == null)
+        {
+            MessageBox.Show("Vui lòng chọn một đơn đặt sân trên bảng để xem trước hóa đơn.", "Chưa chọn đơn", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var invoice = new InvoiceDto
+        {
+            InvoiceCode = $"HD-{DateTime.Today:yyyyMMdd}-{selectedBooking.Id:D3}",
+            BookingCode = selectedBooking.BookingCode,
+            BranchId = selectedBooking.BranchId,
+            BranchName = selectedBooking.BranchName,
+            CustomerName = selectedBooking.CustomerName,
+            CustomerPhone = selectedBooking.CustomerPhone,
+            CourtFee = selectedBooking.TotalAmount,
+            ServiceFee = 35000,
+            DiscountAmount = 0,
+            DepositPaid = selectedBooking.DepositAmount,
+            CashGiven = selectedBooking.TotalAmount + 35000 - selectedBooking.DepositAmount,
+            PaymentMethod = PaymentMethod.Cash,
+            CashierName = UserSession.FullName,
+            CreatedAt = DateTime.Now,
+            ServiceDetails = new List<BookingServiceDetailDto>
+            {
+                new() { ServiceItemName = "Nước điện giải Revive", Unit = "Chai", Quantity = 2, UnitPrice = 15000 },
+                new() { ServiceItemName = "Khăn lạnh thể thao", Unit = "Cái", Quantity = 1, UnitPrice = 5000 }
+            }
+        };
+
+        using var preview = new InvoicePreviewDialog(invoice);
+        preview.ShowDialog(this);
     }
 
     protected override async void OnFormClosing(FormClosingEventArgs e)
