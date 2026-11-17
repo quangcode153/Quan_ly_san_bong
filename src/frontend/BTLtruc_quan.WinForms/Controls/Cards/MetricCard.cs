@@ -191,29 +191,45 @@ public class MetricCard : Control
 
         using (var titleFont = new Font("Segoe UI", Math.Max(7f, 8f * factor), FontStyle.Bold))
         using (var titleBrush = new SolidBrush(UITheme.TextSecondary))
+        using (var sfTitle = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
         {
             var titleRect = new RectangleF(textLeft, textTop, maxTextWidth, DpiHelper.Scale(18, factor));
-            g.DrawString(_title.ToUpper(), titleFont, titleBrush, titleRect);
+            g.DrawString(_title.ToUpper(), titleFont, titleBrush, titleRect, sfTitle);
         }
 
         // 5. Vẽ Giá trị nổi bật (Value)
         int valueTop = textTop + DpiHelper.Scale(17, factor);
         using (var valFont = new Font("Segoe UI", Math.Max(12f, 15.5f * factor), FontStyle.Bold))
         using (var valBrush = new SolidBrush(UITheme.TextPrimary))
+        using (var sfVal = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
         {
             var valRect = new RectangleF(textLeft, valueTop, maxTextWidth + DpiHelper.Scale(6, factor), DpiHelper.Scale(34, factor));
-            g.DrawString(_value, valFont, valBrush, valRect);
+            g.DrawString(_value, valFont, valBrush, valRect, sfVal);
         }
 
         // 6. Vẽ Dòng xu hướng / chú thích (TrendText)
         if (!string.IsNullOrWhiteSpace(_trendText))
         {
             int trendTop = Height - padding - DpiHelper.Scale(16, factor);
-            using (var trendFont = new Font("Segoe UI", Math.Max(7.5f, 8.5f * factor), FontStyle.Regular))
-            using (var trendBrush = new SolidBrush(_trendColor))
+            float availableWidth = Width - (padding * 2);
+            float fontSize = Math.Max(7.2f, 8.2f * factor);
+
+            // Tự động thu nhỏ font nhẹ nếu độ dài vượt quá không gian khả dụng ở DPI 125%-150%
+            using (var testFont = new Font("Segoe UI", fontSize, FontStyle.Regular))
             {
-                var trendRect = new RectangleF(textLeft, trendTop, Width - (padding * 2), DpiHelper.Scale(18, factor));
-                g.DrawString(_trendText, trendFont, trendBrush, trendRect);
+                var measured = g.MeasureString(_trendText, testFont);
+                if (measured.Width > availableWidth && fontSize > 6.8f)
+                {
+                    fontSize = Math.Max(6.8f, fontSize - 1f);
+                }
+            }
+
+            using (var trendFont = new Font("Segoe UI", fontSize, FontStyle.Regular))
+            using (var trendBrush = new SolidBrush(_trendColor))
+            using (var sfTrend = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
+            {
+                var trendRect = new RectangleF(textLeft, trendTop, availableWidth, DpiHelper.Scale(18, factor));
+                g.DrawString(_trendText, trendFont, trendBrush, trendRect, sfTrend);
             }
         }
     }

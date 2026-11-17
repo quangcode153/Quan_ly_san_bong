@@ -434,6 +434,7 @@ public partial class MainForm : Form
         _btnRefresh.Click += async (s, e) =>
         {
             await LoadMatrixDataAsync();
+            await LoadBookingsDataAsync();
             MessageBox.Show("Dữ liệu ca sân và thống kê vừa được đồng bộ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
 
@@ -527,7 +528,7 @@ public partial class MainForm : Form
             Dock = DockStyle.Fill,
             Title = "SÂN HOẠT ĐỘNG",
             Value = "6 / 6 Sân",
-            TrendText = "100% sân mở hoạt động (+0 bảo trì)",
+            TrendText = "100% sân sẵn sàng • 0 bảo trì",
             TrendColor = UITheme.Primary,
             Icon = IconChar.Futbol,
             IconColor = UITheme.Primary,
@@ -540,7 +541,7 @@ public partial class MainForm : Form
             Dock = DockStyle.Fill,
             Title = "DOANH THU CA TRỰC",
             Value = "8.450.000 đ",
-            TrendText = "+18.5% so với mục tiêu (Đạt 84.5%)",
+            TrendText = "+18.5% so với mục tiêu ca",
             TrendColor = UITheme.StatusPendingPayment,
             Icon = IconChar.Coins,
             IconColor = ColorTranslator.FromHtml("#D97706"),
@@ -553,7 +554,7 @@ public partial class MainForm : Form
             Dock = DockStyle.Fill,
             Title = "CA CHỜ DUYỆT CỌC",
             Value = "3 ca",
-            TrendText = "Cần duyệt cọc • Giữ tối đa 15 phút",
+            TrendText = "Giữ chỗ tối đa 15 phút",
             TrendColor = UITheme.StatusInUse,
             Icon = IconChar.Clock,
             IconColor = UITheme.StatusInUse,
@@ -566,7 +567,7 @@ public partial class MainForm : Form
             Dock = DockStyle.Fill,
             Title = "TỶ LỆ LẤP ĐẦY",
             Value = "78.4%",
-            TrendText = "Khung giờ vàng tối đạt 95% công suất",
+            TrendText = "Khung giờ vàng đạt 95%",
             TrendColor = ColorTranslator.FromHtml("#2563EB"),
             Icon = IconChar.ChartLine,
             IconColor = ColorTranslator.FromHtml("#2563EB"),
@@ -853,7 +854,8 @@ public partial class MainForm : Form
         _txtSearchCourt = new SearchTextBox
         {
             PlaceholderText = "Tìm theo tên sân, mã đơn, khách hàng...",
-            Size = new Size(DpiHelper.Scale(260, factor), DpiHelper.Scale(34, factor)),
+            Size = new Size(DpiHelper.Scale(280, factor), DpiHelper.Scale(34, factor)),
+            MinimumSize = new Size(DpiHelper.Scale(240, factor), DpiHelper.Scale(34, factor)),
             Margin = new Padding(0, 0, DpiHelper.Scale(16, factor), 0)
         };
         _txtSearchCourt.SearchSubmitted += (s, query) => ApplyCourtMatrixFilter();
@@ -1188,7 +1190,8 @@ public partial class MainForm : Form
         _txtSearchBookings = new SearchTextBox
         {
             PlaceholderText = "Tìm theo mã đơn, khách hàng, SĐT...",
-            Size = new Size(DpiHelper.Scale(240, factor), DpiHelper.Scale(34, factor)),
+            Size = new Size(DpiHelper.Scale(280, factor), DpiHelper.Scale(34, factor)),
+            MinimumSize = new Size(DpiHelper.Scale(240, factor), DpiHelper.Scale(34, factor)),
             Margin = new Padding(0, 0, DpiHelper.Scale(14, factor), 0)
         };
         _txtSearchBookings.SearchSubmitted += (s, q) => FilterBookingsGrid();
@@ -1234,30 +1237,11 @@ public partial class MainForm : Form
             Size = new Size(DpiHelper.Scale(150, factor), DpiHelper.Scale(36, factor)),
             CornerRadius = 6,
             Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
-            Margin = new Padding(0, 0, DpiHelper.Scale(8, factor), 0),
             UseMnemonic = false
         };
         btnPrintReceipt.Click += (s, e) => ShowSelectedInvoicePreview();
 
-        var btnRefreshBookings = new ModernButton
-        {
-            Text = "Làm mới",
-            IconChar = IconChar.ArrowsRotate,
-            IconSize = 14,
-            BackgroundColor = Color.White,
-            HoverColor = UITheme.HoverBackground,
-            BorderColor = UITheme.BorderColor,
-            BorderSize = 1f,
-            ForeColor = UITheme.TextPrimary,
-            IconColor = UITheme.TextSecondary,
-            Size = new Size(DpiHelper.Scale(105, factor), DpiHelper.Scale(36, factor)),
-            CornerRadius = 6,
-            Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold),
-            UseMnemonic = false
-        };
-        btnRefreshBookings.Click += async (s, e) => await LoadBookingsDataAsync();
-
-        rightActionFlow.Controls.AddRange(new Control[] { btnOpenPos, btnPrintReceipt, btnRefreshBookings });
+        rightActionFlow.Controls.AddRange(new Control[] { btnOpenPos, btnPrintReceipt });
 
         filterBar.Controls.Add(rightActionFlow);
         filterBar.Controls.Add(leftFilterFlow);
@@ -1307,7 +1291,7 @@ public partial class MainForm : Form
         _dgvBookings.ColumnHeadersDefaultCellStyle.BackColor = UITheme.LightBackground;
         _dgvBookings.ColumnHeadersDefaultCellStyle.ForeColor = UITheme.TextPrimary;
         _dgvBookings.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", Math.Max(8.5f, 9.2f * factor), FontStyle.Bold);
-        _dgvBookings.ColumnHeadersHeight = DpiHelper.Scale(38, factor);
+        _dgvBookings.ColumnHeadersHeight = DpiHelper.Scale(48, factor);
         _dgvBookings.DefaultCellStyle.Font = new Font("Segoe UI", Math.Max(8.5f, 9f * factor), FontStyle.Regular);
         _dgvBookings.DefaultCellStyle.ForeColor = UITheme.TextPrimary;
         _dgvBookings.DefaultCellStyle.SelectionBackColor = UITheme.PrimaryLight;
@@ -1315,39 +1299,44 @@ public partial class MainForm : Form
         _dgvBookings.RowTemplate.Height = DpiHelper.Scale(34, factor);
         _dgvBookings.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(248, 250, 252);
 
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Mã Đơn", FillWeight = 14 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Khách Hàng", FillWeight = 22 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Mã Đơn", FillWeight = 12 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Khách Hàng", FillWeight = 20 });
         _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Số Điện Thoại", FillWeight = 16 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sân Thi Đấu & Khung Giờ", FillWeight = 32 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tổng Tiền", FillWeight = 16 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Đã Cọc (30%)", FillWeight = 16 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Còn Lại", FillWeight = 16 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Trạng Thái", FillWeight = 20 });
-        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ngày Đặt", FillWeight = 16 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sân Thi Đấu & Khung Giờ", FillWeight = 28 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tổng Tiền", FillWeight = 15 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Đã Cọc (30%)", FillWeight = 15 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Còn Lại", FillWeight = 15 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Trạng Thái", FillWeight = 24 });
+        _dgvBookings.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ngày Đặt", FillWeight = 15 });
 
         _dgvBookings.CellFormatting += (s, e) =>
         {
             if (e.ColumnIndex == 7 && e.Value != null) // Trạng thái
             {
                 string val = e.Value.ToString() ?? "";
-                if (val.Contains("InUse") || val.Contains("Đang đá"))
+                if (val.Contains("thi đấu") || val.Contains("InUse") || val.Contains("Đang đá"))
                 {
                     e.CellStyle!.ForeColor = UITheme.StatusInUse;
                     e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
                 }
-                else if (val.Contains("Confirmed") || val.Contains("Đã cọc"))
+                else if (val.Contains("Đã cọc") || val.Contains("Confirmed"))
                 {
                     e.CellStyle!.ForeColor = UITheme.StatusConfirmed;
                     e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
                 }
-                else if (val.Contains("Completed") || val.Contains("tất toán"))
+                else if (val.Contains("tất toán") || val.Contains("Completed"))
                 {
                     e.CellStyle!.ForeColor = UITheme.StatusAvailable;
                     e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
                 }
-                else if (val.Contains("Cancelled") || val.Contains("hủy"))
+                else if (val.Contains("hủy") || val.Contains("Cancelled"))
                 {
                     e.CellStyle!.ForeColor = UITheme.TextMuted;
+                }
+                else if (val.Contains("Chờ cọc") || val.Contains("Holding"))
+                {
+                    e.CellStyle!.ForeColor = UITheme.StatusPendingPayment;
+                    e.CellStyle!.Font = new Font("Segoe UI Semibold", 8.8f, FontStyle.Bold);
                 }
             }
         };
@@ -1776,11 +1765,11 @@ public partial class MainForm : Form
 
             string statusText = b.BookingStatus switch
             {
-                BookingStatus.Holding => "Chờ cọc (Holding)",
-                BookingStatus.Confirmed => "Đã cọc 30% (Confirmed)",
-                BookingStatus.CheckedIn => "Đang đá (InUse)",
-                BookingStatus.Completed => "Đã tất toán 100%",
-                BookingStatus.Cancelled => "Đã hủy (Cancelled)",
+                BookingStatus.Holding => "Chờ cọc",
+                BookingStatus.Confirmed => "Đã cọc 30%",
+                BookingStatus.CheckedIn => "Đang thi đấu",
+                BookingStatus.Completed => "Đã tất toán",
+                BookingStatus.Cancelled => "Đã hủy",
                 _ => b.BookingStatus.ToString()
             };
 
